@@ -1,379 +1,349 @@
 package com.parallel.ui;
 
-import com.parallel.filter.BatchProcessor;
-import com.parallel.filter.BatchProcessor.ExecutionStrategy;
+import com.parallel.model.BenchmarkResult;
+import com.parallel.strategy.*;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.*;
 import java.util.List;
 
-/**
- * Modern Multi-Strategy Parallel Computing Dashboard.
- * Allows interactive evaluation of different architectural concurrency strategies.
- */
 public class MainUI extends JFrame {
 
-    private static final Color PRIMARY_COLOR = new Color(33, 150, 243);
-    private static final Color SUCCESS_COLOR = new Color(46, 125, 50);
-    private static final Color ACCENT_ORANGE = new Color(230, 81, 0);
-    private static final Color BG_LIGHT = new Color(245, 247, 250);
+    private static final Color DYNAMIC_COLOR = new Color(33, 150, 243);    // Blue
+    private static final Color STATIC_COLOR  = new Color(245, 124, 0);     // Orange
+    private static final Color PIPELINE_COLOR = new Color(46, 125, 50);    // Green
     private static final Color CARD_BG = Color.WHITE;
     private static final Color TEXT_DARK = new Color(33, 33, 33);
 
     private JLabel folderLabel;
-    private JLabel cpuInfoLabel;
     private JComboBox<String> threadSelector;
-    private JComboBox<ExecutionStrategy> strategySelector;
+    private JComboBox<String> strategySelector;
     private JProgressBar progressBar;
-    private JButton runButton;
-    private JButton benchmarkButton;
+    private JButton runSingleButton;
+    private JButton runUltimateButton;
     private JTextArea logArea;
-    private ChartPanel chartPanel;
+    private MultiChartPanel chartPanel;
 
     private File selectedDirectory;
     private final int availableCores;
 
+    private final Map<String, BatchStrategy> strategyMap = new LinkedHashMap<>();
+
     public MainUI() {
-        super("Parallel Image Processing Studio | Architectural Concurrency Benchmark");
+        super("Parallel Image Processing Studio | Clean Architecture Dashboard");
         this.availableCores = Runtime.getRuntime().availableProcessors();
-        initModernUI();
+
+        strategyMap.put("Dynamic Atomic Queue", new DynamicQueueStrategy());
+        strategyMap.put("Static Chunk Partitioning", new StaticPartitionStrategy());
+        strategyMap.put("Pipelined (I/O Decoupled)", new PipelinedStrategy());
+
+        initCleanUI();
     }
 
-    private void initModernUI() {
+    private void initCleanUI() {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(1220, 800);
+        setSize(1240, 820);
         setLocationRelativeTo(null);
-        getContentPane().setBackground(BG_LIGHT);
+        getContentPane().setBackground(new Color(245, 247, 250));
         setLayout(new BorderLayout(15, 15));
 
-        // 1. Header & Controls
-        JPanel headerCard = createStyledPanel();
+        // 1. Header Card
+        JPanel headerCard = createCardPanel();
         headerCard.setLayout(new BoxLayout(headerCard, BoxLayout.Y_AXIS));
 
         JPanel statusRow = new JPanel(new BorderLayout());
         statusRow.setOpaque(false);
-        JLabel titleLabel = new JLabel("Parallel Image Edge Detection (Sobel Architecture Studio)");
-        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
-        titleLabel.setForeground(TEXT_DARK);
-
-        cpuInfoLabel = new JLabel(String.format("System: %d Logical CPU Cores Available", availableCores));
-        cpuInfoLabel.setFont(new Font("Segoe UI", Font.ITALIC, 13));
-        cpuInfoLabel.setForeground(new Color(100, 116, 139));
-
-        statusRow.add(titleLabel, BorderLayout.WEST);
-        statusRow.add(cpuInfoLabel, BorderLayout.EAST);
+        JLabel title = new JLabel("Parallel Image Edge Detection (Clean Architecture)");
+        title.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        JLabel cpuInfo = new JLabel("Hardware: " + availableCores + " Logical CPU Cores Available");
+        cpuInfo.setFont(new Font("Segoe UI", Font.ITALIC, 13));
+        cpuInfo.setForeground(new Color(100, 116, 139));
+        statusRow.add(title, BorderLayout.WEST);
+        statusRow.add(cpuInfo, BorderLayout.EAST);
         headerCard.add(statusRow);
-        headerCard.add(Box.createVerticalStrut(12));
+        headerCard.add(Box.createVerticalStrut(10));
 
-        // Controls Row
-        JPanel controlsRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
-        controlsRow.setOpaque(false);
+        JPanel controls = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        controls.setOpaque(false);
 
-        JButton browseBtn = createStyledButton("Choose Folder", new Color(74, 85, 104));
+        JButton browse = createButton("Select Images Folder", new Color(74, 85, 104));
         folderLabel = new JLabel("No folder selected");
-        folderLabel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        controls.add(browse);
+        controls.add(folderLabel);
+        controls.add(Box.createHorizontalStrut(15));
 
-        controlsRow.add(browseBtn);
-        controlsRow.add(folderLabel);
-        controlsRow.add(Box.createHorizontalStrut(10));
+        controls.add(new JLabel("Strategy:"));
+        strategySelector = new JComboBox<>(strategyMap.keySet().toArray(new String[0]));
+        controls.add(strategySelector);
 
-        controlsRow.add(new JLabel("Strategy:"));
-        strategySelector = new JComboBox<>(ExecutionStrategy.values());
-        controlsRow.add(strategySelector);
-
-        controlsRow.add(new JLabel("Threads:"));
-        List<String> threadOptions = new ArrayList<>();
-        int[] availableThreads = {1, 2, 4, 8, 12, 16, 32, 64, 128};
-        for (int t : availableThreads) {
-            if (t == availableCores) {
-                threadOptions.add(t + " (Recommended)");
-            } else {
-                threadOptions.add(String.valueOf(t));
-            }
+        controls.add(new JLabel("Threads:"));
+        List<String> threadOpts = new ArrayList<>();
+        int[] threadsArr = {1, 2, 4, 8, 12, 16, 32, 64, 128};
+        for (int t : threadsArr) {
+            threadOpts.add(t == availableCores ? t + " (Recommended)" : String.valueOf(t));
         }
-        threadSelector = new JComboBox<>(threadOptions.toArray(new String[0]));
-        for (int i = 0; i < threadOptions.size(); i++) {
-            if (threadOptions.get(i).contains("Recommended")) {
-                threadSelector.setSelectedIndex(i);
-                break;
-            }
+        threadSelector = new JComboBox<>(threadOpts.toArray(new String[0]));
+        for (int i = 0; i < threadOpts.size(); i++) {
+            if (threadOpts.get(i).contains("Recommended")) threadSelector.setSelectedIndex(i);
         }
-        controlsRow.add(threadSelector);
+        controls.add(threadSelector);
 
-        runButton = createStyledButton("Run Comparison", PRIMARY_COLOR);
-        runButton.setEnabled(false);
-        benchmarkButton = createStyledButton("Benchmark Scales (1-128 Th)", new Color(106, 27, 154));
-        benchmarkButton.setEnabled(false);
+        runSingleButton = createButton("Run Selected", DYNAMIC_COLOR);
+        runSingleButton.setEnabled(false);
+        runUltimateButton = createButton("Ultimate Benchmark (All 3 Strategies)", new Color(106, 27, 154));
+        runUltimateButton.setEnabled(false);
 
-        controlsRow.add(runButton);
-        controlsRow.add(benchmarkButton);
-        headerCard.add(controlsRow);
+        controls.add(runSingleButton);
+        controls.add(runUltimateButton);
+        headerCard.add(controls);
 
-        JPanel topContainer = new JPanel(new BorderLayout());
-        topContainer.setOpaque(false);
-        topContainer.setBorder(new EmptyBorder(12, 15, 0, 15));
-        topContainer.add(headerCard, BorderLayout.CENTER);
-        add(topContainer, BorderLayout.NORTH);
+        JPanel topWrap = new JPanel(new BorderLayout());
+        topWrap.setOpaque(false);
+        topWrap.setBorder(new EmptyBorder(12, 15, 0, 15));
+        topWrap.add(headerCard, BorderLayout.CENTER);
+        add(topWrap, BorderLayout.NORTH);
 
-        // 2. Center Panel: Log & Multi-Bar Chart
-        JPanel centerContainer = new JPanel(new GridLayout(1, 2, 15, 15));
-        centerContainer.setOpaque(false);
-        centerContainer.setBorder(new EmptyBorder(0, 15, 0, 15));
+        // 2. Center: Log & Grouped Chart
+        JPanel center = new JPanel(new GridLayout(1, 2, 15, 15));
+        center.setOpaque(false);
+        center.setBorder(new EmptyBorder(0, 15, 0, 15));
 
-        JPanel logCard = createStyledPanel();
+        JPanel logCard = createCardPanel();
         logCard.setLayout(new BorderLayout(5, 5));
-        JLabel logTitle = new JLabel("Execution Metrics & System Log");
-        logTitle.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        logCard.add(logTitle, BorderLayout.NORTH);
-
+        logCard.add(new JLabel("Execution & Benchmark Logs"), BorderLayout.NORTH);
         logArea = new JTextArea();
         logArea.setEditable(false);
-        logArea.setFont(new Font("Consolas", Font.PLAIN, 13));
+        logArea.setFont(new Font("Consolas", Font.PLAIN, 12));
         logArea.setBackground(new Color(250, 250, 250));
-        JScrollPane scrollLog = new JScrollPane(logArea);
-        scrollLog.setBorder(BorderFactory.createLineBorder(new Color(226, 232, 240)));
-        logCard.add(scrollLog, BorderLayout.CENTER);
+        logCard.add(new JScrollPane(logArea), BorderLayout.CENTER);
 
-        chartPanel = new ChartPanel();
-
-        centerContainer.add(logCard);
-        centerContainer.add(chartPanel);
-        add(centerContainer, BorderLayout.CENTER);
+        chartPanel = new MultiChartPanel();
+        center.add(logCard);
+        center.add(chartPanel);
+        add(center, BorderLayout.CENTER);
 
         // 3. Bottom Progress Bar
-        JPanel bottomCard = createStyledPanel();
-        bottomCard.setLayout(new BorderLayout(8, 8));
-
+        JPanel bottom = createCardPanel();
+        bottom.setLayout(new BorderLayout());
         progressBar = new JProgressBar(0, 100);
         progressBar.setStringPainted(true);
         progressBar.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        progressBar.setForeground(PRIMARY_COLOR);
         progressBar.setPreferredSize(new Dimension(100, 24));
+        bottom.add(progressBar, BorderLayout.CENTER);
 
-        bottomCard.add(progressBar, BorderLayout.CENTER);
-
-        JPanel bottomContainer = new JPanel(new BorderLayout());
-        bottomContainer.setOpaque(false);
-        bottomContainer.setBorder(new EmptyBorder(0, 15, 15, 15));
-        bottomContainer.add(bottomCard, BorderLayout.CENTER);
-        add(bottomContainer, BorderLayout.SOUTH);
+        JPanel bottomWrap = new JPanel(new BorderLayout());
+        bottomWrap.setOpaque(false);
+        bottomWrap.setBorder(new EmptyBorder(0, 15, 15, 15));
+        bottomWrap.add(bottom, BorderLayout.CENTER);
+        add(bottomWrap, BorderLayout.SOUTH);
 
         // Listeners
-        browseBtn.addActionListener(e -> chooseDirectory());
-        runButton.addActionListener(e -> executeComparison());
-        benchmarkButton.addActionListener(e -> executeFullBenchmark());
+        browse.addActionListener(e -> chooseDirectory());
+        runSingleButton.addActionListener(e -> executeSingle());
+        runUltimateButton.addActionListener(e -> executeUltimateBenchmark());
     }
 
-    private JPanel createStyledPanel() {
+    private JPanel createCardPanel() {
         JPanel p = new JPanel();
         p.setBackground(CARD_BG);
         p.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(new Color(226, 232, 240), 1),
-                new EmptyBorder(12, 15, 12, 15)
+                new EmptyBorder(10, 15, 10, 15)
         ));
         return p;
     }
 
-    private JButton createStyledButton(String text, Color bg) {
-        JButton btn = new JButton(text);
-        btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        btn.setForeground(Color.WHITE);
-        btn.setBackground(bg);
-        btn.setFocusPainted(false);
-        btn.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(bg.darker(), 1),
-                new EmptyBorder(6, 14, 6, 14)
+    private JButton createButton(String title, Color c) {
+        JButton b = new JButton(title);
+        b.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        b.setForeground(Color.WHITE);
+        b.setBackground(c);
+        b.setFocusPainted(false);
+        b.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(c.darker(), 1),
+                new EmptyBorder(6, 12, 6, 12)
         ));
-        return btn;
+        return b;
     }
 
     private void chooseDirectory() {
-        JFileChooser chooser = new JFileChooser();
-        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-            selectedDirectory = chooser.getSelectedFile();
-            List<File> images = getImageFiles();
-            folderLabel.setText(selectedDirectory.getName() + " (" + images.size() + " images found)");
-            boolean hasImages = !images.isEmpty();
-            runButton.setEnabled(hasImages);
-            benchmarkButton.setEnabled(hasImages);
+        JFileChooser ch = new JFileChooser();
+        ch.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        if (ch.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            selectedDirectory = ch.getSelectedFile();
+            List<File> images = getImages();
+            folderLabel.setText(selectedDirectory.getName() + " (" + images.size() + " images)");
+            boolean ok = !images.isEmpty();
+            runSingleButton.setEnabled(ok);
+            runUltimateButton.setEnabled(ok);
             logArea.append("Folder Selected: " + selectedDirectory.getAbsolutePath() + " [" + images.size() + " images]\n");
         }
     }
 
-    private List<File> getImageFiles() {
+    private List<File> getImages() {
         if (selectedDirectory == null) return new ArrayList<>();
-        File[] files = selectedDirectory.listFiles((dir, name) -> {
-            String lower = name.toLowerCase();
-            return lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png");
+        File[] arr = selectedDirectory.listFiles((d, n) -> {
+            String l = n.toLowerCase();
+            return l.endsWith(".jpg") || l.endsWith(".jpeg") || l.endsWith(".png");
         });
-        return files != null ? Arrays.asList(files) : new ArrayList<>();
+        return arr != null ? Arrays.asList(arr) : new ArrayList<>();
     }
 
     private int getSelectedThreads() {
-        String selected = (String) threadSelector.getSelectedItem();
-        if (selected == null) return 1;
-        return Integer.parseInt(selected.split(" ")[0]);
+        String s = (String) threadSelector.getSelectedItem();
+        return s == null ? 1 : Integer.parseInt(s.split(" ")[0]);
     }
 
-    private void executeComparison() {
-        List<File> images = getImageFiles();
+    private void executeSingle() {
+        List<File> images = getImages();
         int threads = getSelectedThreads();
-        ExecutionStrategy strategy = (ExecutionStrategy) strategySelector.getSelectedItem();
+        String stratKey = (String) strategySelector.getSelectedItem();
+        BatchStrategy strategy = strategyMap.get(stratKey);
 
-        setControlsEnabled(false);
-        progressBar.setValue(0);
-        logArea.append(String.format("\n--- Single Comparison (%d Images | %d Threads | %s) ---\n", images.size(), threads, strategy));
+        setControls(false);
+        logArea.append(String.format("\n--- Running Single Comparison [%s | %d Th | %d Images] ---\n", stratKey, threads, images.size()));
 
-        File outSeq = new File(selectedDirectory, "output_seq");
-        File outPar = new File(selectedDirectory, "output_par_" + strategy.name().toLowerCase());
+        File outSeq = new File(selectedDirectory, "out_seq");
+        File outPar = new File(selectedDirectory, "out_par_" + strategy.getClass().getSimpleName().toLowerCase());
         outSeq.mkdirs();
         outPar.mkdirs();
 
         new Thread(() -> {
             try {
                 // Sequential
-                long seqTime = BatchProcessor.processSequential(images, outSeq, (done, total) -> {
-                    int p = (int) (((double) done / total) * 50);
+                SequentialStrategy seq = new SequentialStrategy();
+                long seqTime = seq.execute(images, outSeq, 1, (d, t) -> {
+                    int p = (int) (((double) d / t) * 50);
                     SwingUtilities.invokeLater(() -> {
                         progressBar.setValue(p);
-                        progressBar.setString("Sequential: " + done + " / " + total);
+                        progressBar.setString("Sequential: " + d + "/" + t);
                     });
                 });
                 SwingUtilities.invokeLater(() -> logArea.append("Sequential Baseline: " + seqTime + " ms\n"));
 
-                // Parallel with selected strategy
-                SwingUtilities.invokeLater(() -> progressBar.setString("Parallel (" + threads + " Th): " + strategy + "..."));
-                long parTime = BatchProcessor.processParallel(images, outPar, threads, strategy, (done, total) -> {
-                    int p = 50 + (int) (((double) done / total) * 50);
+                // Selected Strategy
+                long parTime = strategy.execute(images, outPar, threads, (d, t) -> {
+                    int p = 50 + (int) (((double) d / t) * 50);
                     SwingUtilities.invokeLater(() -> {
                         progressBar.setValue(p);
-                        progressBar.setString("Parallel [" + strategy.name() + "]: " + done + " / " + total);
+                        progressBar.setString("Parallel [" + stratKey + "]: " + d + "/" + t);
                     });
                 });
-                SwingUtilities.invokeLater(() -> logArea.append("Parallel (" + strategy + "): " + parTime + " ms\n"));
+                SwingUtilities.invokeLater(() -> logArea.append(stratKey + " Time: " + parTime + " ms\n"));
 
                 double speedup = (double) seqTime / (parTime > 0 ? parTime : 1);
                 SwingUtilities.invokeLater(() -> {
-                    logArea.append(String.format("=> Achieved Speedup: %.2fx | Efficiency: %.2f\n", speedup, speedup / threads));
-                    chartPanel.setSingleComparison(seqTime, parTime, speedup, threads, strategy.toString());
+                    logArea.append(String.format("=> Speedup: %.2fx | Efficiency: %.2f\n", speedup, speedup / threads));
+                    chartPanel.setSingleResult(seqTime, parTime, speedup, threads, stratKey);
                     progressBar.setValue(100);
                     progressBar.setString("Done! Speedup: " + String.format("%.2fx", speedup));
-                    setControlsEnabled(true);
+                    setControls(true);
                 });
             } catch (Exception ex) {
                 SwingUtilities.invokeLater(() -> {
                     logArea.append("Error: " + ex.getMessage() + "\n");
-                    setControlsEnabled(true);
+                    setControls(true);
                 });
             }
         }).start();
     }
 
-    private void executeFullBenchmark() {
-        List<File> images = getImageFiles();
-        ExecutionStrategy strategy = (ExecutionStrategy) strategySelector.getSelectedItem();
+    private void executeUltimateBenchmark() {
+        List<File> images = getImages();
+        setControls(false);
+        logArea.append(String.format("\n================ ULTIMATE BENCHMARK: 3 STRATEGIES x 9 SCALES (%d Images) ================\n", images.size()));
 
-        setControlsEnabled(false);
-        progressBar.setValue(0);
-        logArea.append(String.format("\n================ BENCHMARK SUITE: %s (%d Images) ================\n", strategy, images.size()));
-
-        File outDir = new File(selectedDirectory, "output_benchmark");
-        outDir.mkdirs();
+        File outBench = new File(selectedDirectory, "out_ultimate_benchmark");
+        outBench.mkdirs();
 
         new Thread(() -> {
             try {
-                SwingUtilities.invokeLater(() -> progressBar.setString("Measuring Baseline Sequential..."));
-                long seqTime = BatchProcessor.processSequential(images, outDir, null);
-                SwingUtilities.invokeLater(() -> {
-                    logArea.append("Baseline Sequential Time: " + seqTime + " ms\n");
-                    logArea.append("-------------------------------------------------------------------\n");
-                    logArea.append(String.format("%-10s | %-12s | %-10s | %-10s\n", "Threads", "Time (ms)", "Speedup", "Efficiency"));
-                    logArea.append("-------------------------------------------------------------------\n");
-                });
+                // Baseline
+                SequentialStrategy seq = new SequentialStrategy();
+                long seqTime = seq.execute(images, outBench, 1, null);
+                SwingUtilities.invokeLater(() -> logArea.append("Sequential Baseline Time: " + seqTime + " ms\n\n"));
 
                 int[] testScales = {1, 2, 4, 8, 12, 16, 32, 64, 128};
-                List<Integer> threadList = new ArrayList<>();
-                List<Long> timeList = new ArrayList<>();
-                List<Double> speedupList = new ArrayList<>();
+                int totalSteps = testScales.length * strategyMap.size();
+                int currentStep = 0;
 
-                for (int idx = 0; idx < testScales.length; idx++) {
-                    int t = testScales[idx];
-                    final int stepIndex = idx + 1;
-                    final int totalSteps = testScales.length;
+                List<BenchmarkResult> results = new ArrayList<>();
 
-                    long parTime = BatchProcessor.processParallel(images, outDir, t, strategy, (done, total) -> {
-                        int overallPercent = (int) (((stepIndex - 1 + ((double) done / total)) / totalSteps) * 100);
-                        SwingUtilities.invokeLater(() -> {
-                            progressBar.setValue(overallPercent);
-                            progressBar.setString("Benchmark: " + t + " Threads [" + done + "/" + total + "]");
+                for (int t : testScales) {
+                    for (Map.Entry<String, BatchStrategy> entry : strategyMap.entrySet()) {
+                        String sName = entry.getKey();
+                        BatchStrategy strategy = entry.getValue();
+                        currentStep++;
+                        final int stepNum = currentStep;
+
+                        long parTime = strategy.execute(images, outBench, t, (d, tot) -> {
+                            int overall = (int) (((stepNum - 1 + ((double) d / tot)) / totalSteps) * 100);
+                            SwingUtilities.invokeLater(() -> {
+                                progressBar.setValue(overall);
+                                progressBar.setString(sName + " (" + t + "T) [" + d + "/" + tot + "]");
+                            });
                         });
-                    });
 
-                    double speedup = (double) seqTime / (parTime > 0 ? parTime : 1);
-                    double eff = speedup / t;
+                        double speedup = (double) seqTime / (parTime > 0 ? parTime : 1);
+                        double eff = speedup / t;
 
-                    threadList.add(t);
-                    timeList.add(parTime);
-                    speedupList.add(speedup);
+                        BenchmarkResult res = new BenchmarkResult(sName, t, parTime, speedup, eff);
+                        results.add(res);
 
-                    SwingUtilities.invokeLater(() -> {
-                        logArea.append(String.format("%-10d | %-12d | %-8.2fx | %-10.2f\n", t, parTime, speedup, eff));
-                        chartPanel.setBenchmarkBars(seqTime, new ArrayList<>(threadList), new ArrayList<>(timeList), new ArrayList<>(speedupList), strategy.toString());
-                    });
+                        SwingUtilities.invokeLater(() -> {
+                            logArea.append(String.format("%-28s | %-3dT | Time: %-6d ms | Speedup: %-5.2fx | Eff: %.2f\n", sName, t, parTime, speedup, eff));
+                            chartPanel.setUltimateResults(seqTime, new ArrayList<>(results));
+                        });
+                    }
+                    SwingUtilities.invokeLater(() -> logArea.append("------------------------------------------------------------------------------------\n"));
                 }
 
                 SwingUtilities.invokeLater(() -> {
-                    logArea.append("================ BENCHMARK FINISHED ================\n");
+                    logArea.append("================ ULTIMATE BENCHMARK FINISHED ================\n");
                     progressBar.setValue(100);
-                    progressBar.setString("Benchmark Complete!");
-                    setControlsEnabled(true);
+                    progressBar.setString("All Benchmarks Complete!");
+                    setControls(true);
                 });
 
             } catch (Exception ex) {
                 SwingUtilities.invokeLater(() -> {
                     logArea.append("Benchmark Error: " + ex.getMessage() + "\n");
-                    setControlsEnabled(true);
+                    setControls(true);
                 });
             }
         }).start();
     }
 
-    private void setControlsEnabled(boolean enabled) {
-        runButton.setEnabled(enabled);
-        benchmarkButton.setEnabled(enabled);
+    private void setControls(boolean enabled) {
+        runSingleButton.setEnabled(enabled);
+        runUltimateButton.setEnabled(enabled);
         threadSelector.setEnabled(enabled);
         strategySelector.setEnabled(enabled);
     }
 
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> {
-            MainUI ui = new MainUI();
-            ui.setVisible(true);
-        });
+        SwingUtilities.invokeLater(() -> new MainUI().setVisible(true));
     }
 
     /**
-     * Interactive Multi-Bar Chart displaying Speedup and Execution Time tags above bars.
+     * Grouped Multi-Bar Chart displaying comparison of strategies side-by-side.
      */
-    private static class ChartPanel extends JPanel {
-        private boolean isBenchmark = false;
-        private String strategyName = "";
+    private static class MultiChartPanel extends JPanel {
+        private boolean isUltimate = false;
 
-        private long seqTime = 0;
-        private long parTime = 0;
+        // Single data
+        private long seqTime = 0, parTime = 0;
         private double singleSpeedup = 0.0;
         private int singleThreads = 0;
+        private String singleStrategy = "";
 
-        private List<Integer> benchThreads = new ArrayList<>();
-        private List<Long> benchTimes = new ArrayList<>();
-        private List<Double> benchSpeedups = new ArrayList<>();
+        // Ultimate data
+        private List<BenchmarkResult> ultimateResults = new ArrayList<>();
 
-        public ChartPanel() {
+        public MultiChartPanel() {
             setBackground(CARD_BG);
             setBorder(BorderFactory.createCompoundBorder(
                     BorderFactory.createLineBorder(new Color(226, 232, 240), 1),
@@ -381,23 +351,20 @@ public class MainUI extends JFrame {
             ));
         }
 
-        public void setSingleComparison(long seqTime, long parTime, double speedup, int threads, String strategy) {
-            this.isBenchmark = false;
-            this.seqTime = seqTime;
-            this.parTime = parTime;
-            this.singleSpeedup = speedup;
-            this.singleThreads = threads;
-            this.strategyName = strategy;
+        public void setSingleResult(long seq, long par, double sp, int th, String strat) {
+            this.isUltimate = false;
+            this.seqTime = seq;
+            this.parTime = par;
+            this.singleSpeedup = sp;
+            this.singleThreads = th;
+            this.singleStrategy = strat;
             repaint();
         }
 
-        public void setBenchmarkBars(long seqTime, List<Integer> threads, List<Long> times, List<Double> speedups, String strategy) {
-            this.isBenchmark = true;
-            this.seqTime = seqTime;
-            this.benchThreads = threads;
-            this.benchTimes = times;
-            this.benchSpeedups = speedups;
-            this.strategyName = strategy;
+        public void setUltimateResults(long seq, List<BenchmarkResult> results) {
+            this.isUltimate = true;
+            this.seqTime = seq;
+            this.ultimateResults = results;
             repaint();
         }
 
@@ -407,107 +374,122 @@ public class MainUI extends JFrame {
             Graphics2D g2 = (Graphics2D) g;
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-            int width = getWidth();
-            int height = getHeight();
+            int w = getWidth();
+            int h = getHeight();
 
-            if (!isBenchmark) {
-                drawSingleBarChart(g2, width, height);
+            if (!isUltimate) {
+                drawSingle(g2, w, h);
             } else {
-                drawBenchmarkBarChart(g2, width, height);
+                drawUltimateGrouped(g2, w, h);
             }
         }
 
-        private void drawSingleBarChart(Graphics2D g2, int width, int height) {
+        private void drawSingle(Graphics2D g2, int w, int h) {
             if (seqTime == 0 && parTime == 0) {
                 g2.setColor(new Color(148, 163, 184));
-                g2.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-                g2.drawString("Execution charts will render here after execution.", 30, height / 2);
+                g2.drawString("Execution charts will render here.", 30, h / 2);
                 return;
             }
 
-            int chartBaseY = height - 70;
-            int maxBarHeight = height - 170;
+            int baseY = h - 60;
+            int maxBarH = h - 160;
             long maxTime = Math.max(seqTime, parTime);
             if (maxTime == 0) maxTime = 1;
 
-            int barWidth = 90;
-            int bar1X = width / 4 - barWidth / 2;
-            int bar2X = (3 * width) / 4 - barWidth / 2;
+            int bw = 85;
+            int b1X = w / 4 - bw / 2;
+            int b2X = (3 * w) / 4 - bw / 2;
 
-            int bar1Height = (int) (((double) seqTime / maxTime) * maxBarHeight);
-            int bar2Height = (int) (((double) parTime / maxTime) * maxBarHeight);
+            int h1 = (int) (((double) seqTime / maxTime) * maxBarH);
+            int h2 = (int) (((double) parTime / maxTime) * maxBarH);
 
-            // Sequential Bar
-            g2.setColor(ACCENT_ORANGE);
-            g2.fillRoundRect(bar1X, chartBaseY - bar1Height, barWidth, bar1Height, 8, 8);
+            // Sequential
+            g2.setColor(STATIC_COLOR);
+            g2.fillRoundRect(b1X, baseY - h1, bw, h1, 8, 8);
             g2.setColor(TEXT_DARK);
-            g2.setFont(new Font("Segoe UI", Font.BOLD, 13));
-            g2.drawString("Sequential", bar1X + 12, chartBaseY + 22);
-            g2.drawString(seqTime + " ms", bar1X + 18, chartBaseY - bar1Height - 8);
+            g2.drawString("Sequential", b1X + 12, baseY + 20);
+            g2.drawString(seqTime + " ms", b1X + 18, baseY - h1 - 8);
 
-            // Parallel Bar
-            g2.setColor(SUCCESS_COLOR);
-            g2.fillRoundRect(bar2X, chartBaseY - bar2Height, barWidth, bar2Height, 8, 8);
+            // Parallel
+            g2.setColor(DYNAMIC_COLOR);
+            g2.fillRoundRect(b2X, baseY - h2, bw, h2, 8, 8);
             g2.setColor(TEXT_DARK);
-            g2.drawString(singleThreads + " Th (" + strategyName.split(" ")[0] + ")", bar2X - 10, chartBaseY + 22);
-            g2.drawString(parTime + " ms", bar2X + 18, chartBaseY - bar2Height - 26);
+            g2.drawString(singleThreads + "T (" + singleStrategy.split(" ")[0] + ")", b2X - 5, baseY + 20);
+            g2.drawString(parTime + " ms", b2X + 15, baseY - h2 - 25);
 
-            // Speedup badge above parallel bar
-            g2.setColor(PRIMARY_COLOR.darker());
-            g2.setFont(new Font("Segoe UI", Font.BOLD, 15));
-            g2.drawString(String.format("Speedup: %.2fx", singleSpeedup), bar2X - 5, chartBaseY - bar2Height - 8);
+            g2.setColor(PIPELINE_COLOR);
+            g2.setFont(new Font("Segoe UI", Font.BOLD, 14));
+            g2.drawString(String.format("Speedup: %.2fx", singleSpeedup), b2X - 5, baseY - h2 - 8);
         }
 
-        private void drawBenchmarkBarChart(Graphics2D g2, int width, int height) {
-            if (benchThreads.isEmpty()) return;
+        private void drawUltimateGrouped(Graphics2D g2, int w, int h) {
+            if (ultimateResults.isEmpty()) return;
 
+            // Draw Legend
+            g2.setFont(new Font("Segoe UI", Font.BOLD, 11));
+            g2.setColor(DYNAMIC_COLOR);
+            g2.fillRect(w - 380, 15, 12, 12);
             g2.setColor(TEXT_DARK);
-            g2.setFont(new Font("Segoe UI", Font.BOLD, 14));
-            g2.drawString("Strategy: " + strategyName + " (1 to 128 Threads)", 20, 25);
+            g2.drawString("Dynamic Queue", w - 362, 25);
 
-            int count = benchThreads.size();
-            int chartBaseY = height - 60;
-            int maxBarHeight = height - 170;
+            g2.setColor(STATIC_COLOR);
+            g2.fillRect(w - 260, 15, 12, 12);
+            g2.setColor(TEXT_DARK);
+            g2.drawString("Static Partition", w - 242, 25);
 
-            long maxTime = seqTime;
-            for (long t : benchTimes) {
-                if (t > maxTime) maxTime = t;
+            g2.setColor(PIPELINE_COLOR);
+            g2.fillRect(w - 140, 15, 12, 12);
+            g2.setColor(TEXT_DARK);
+            g2.drawString("Pipeline (I/O)", w - 122, 25);
+
+            // Group by thread count
+            Map<Integer, List<BenchmarkResult>> grouped = new LinkedHashMap<>();
+            for (BenchmarkResult r : ultimateResults) {
+                grouped.computeIfAbsent(r.getThreads(), k -> new ArrayList<>()).add(r);
             }
-            if (maxTime == 0) maxTime = 1;
 
-            double bestSpeedup = 0.0;
-            for (double s : benchSpeedups) {
-                if (s > bestSpeedup) bestSpeedup = s;
+            int baseY = h - 50;
+            int maxBarH = h - 140;
+
+            // Find Max Speedup for scaling bar heights
+            double maxSp = 1.0;
+            for (BenchmarkResult r : ultimateResults) {
+                if (r.getSpeedup() > maxSp) maxSp = r.getSpeedup();
             }
+            if (maxSp == 0) maxSp = 1.0;
 
-            int availableWidth = width - 40;
-            int barWidth = Math.min(50, (availableWidth / count) - 10);
-            int gap = (availableWidth - (count * barWidth)) / (count + 1);
+            int groupCount = grouped.size();
+            int groupWidth = (w - 60) / Math.max(1, groupCount);
+            int barWidth = Math.max(8, (groupWidth - 14) / 3);
 
-            for (int i = 0; i < count; i++) {
-                int x = 20 + gap + i * (barWidth + gap);
-                long time = benchTimes.get(i);
-                double speedup = benchSpeedups.get(i);
-                int barHeight = (int) (((double) time / maxTime) * maxBarHeight);
+            int gIdx = 0;
+            for (Map.Entry<Integer, List<BenchmarkResult>> entry : grouped.entrySet()) {
+                int threads = entry.getKey();
+                List<BenchmarkResult> list = entry.getValue();
+                int groupStartX = 30 + (gIdx * groupWidth);
 
-                if (speedup == bestSpeedup && speedup > 1.0) {
-                    g2.setColor(SUCCESS_COLOR);
-                } else {
-                    g2.setColor(PRIMARY_COLOR);
+                for (int i = 0; i < list.size(); i++) {
+                    BenchmarkResult res = list.get(i);
+                    int x = groupStartX + (i * barWidth);
+                    int barH = (int) ((res.getSpeedup() / maxSp) * maxBarH);
+
+                    if (res.getStrategyName().contains("Dynamic")) g2.setColor(DYNAMIC_COLOR);
+                    else if (res.getStrategyName().contains("Static")) g2.setColor(STATIC_COLOR);
+                    else g2.setColor(PIPELINE_COLOR);
+
+                    g2.fillRoundRect(x, baseY - barH, barWidth - 2, barH, 4, 4);
+
+                    // Speedup text over bar
+                    g2.setColor(TEXT_DARK);
+                    g2.setFont(new Font("Segoe UI", Font.PLAIN, 9));
+                    g2.drawString(String.format("%.1f", res.getSpeedup()), x - 2, baseY - barH - 4);
                 }
 
-                g2.fillRoundRect(x, chartBaseY - barHeight, barWidth, barHeight, 6, 6);
-
-                // Speedup text above bar
-                g2.setColor(TEXT_DARK);
+                // Group Label (Threads)
+                g2.setColor(new Color(71, 85, 105));
                 g2.setFont(new Font("Segoe UI", Font.BOLD, 11));
-                g2.drawString(String.format("%.1fx", speedup), x + 2, chartBaseY - barHeight - 8);
-
-                // Threads & Time below bar
-                g2.setColor(new Color(100, 116, 139));
-                g2.drawString(benchThreads.get(i) + "T", x + (barWidth / 4), chartBaseY + 18);
-                g2.setFont(new Font("Segoe UI", Font.PLAIN, 10));
-                g2.drawString(time + "ms", x - 2, chartBaseY + 34);
+                g2.drawString(threads + "T", groupStartX + (groupWidth / 3) - 5, baseY + 18);
+                gIdx++;
             }
         }
     }
