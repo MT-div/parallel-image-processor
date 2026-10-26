@@ -1,13 +1,12 @@
 package com.parallel;
 
-import com.parallel.filter.BatchProcessor;
+import com.parallel.strategy.*;
 import junit.framework.TestCase;
 
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import javax.imageio.ImageIO;
@@ -16,14 +15,13 @@ public class BenchmarkTest extends TestCase {
 
     private static final String INPUT_DIR_PATH = "temp_benchmark_input";
     private static final String OUTPUT_DIR_PATH = "temp_benchmark_output";
-    private static final int IMAGE_COUNT = 16;
+    private static final int IMAGE_COUNT = 12;
     private static final int IMAGE_WIDTH = 1920;
     private static final int IMAGE_HEIGHT = 1080;
 
     private List<File> testFiles;
     private File outputDir;
 
-    // Added main method to allow direct execution as a standard application
     public static void main(String[] args) throws Exception {
         BenchmarkTest benchmark = new BenchmarkTest();
         benchmark.setUp();
@@ -40,8 +38,14 @@ public class BenchmarkTest extends TestCase {
         File inputDir = new File(INPUT_DIR_PATH);
         outputDir = new File(OUTPUT_DIR_PATH);
 
-        if (!inputDir.exists()) inputDir.mkdirs();
-        if (!outputDir.exists()) outputDir.mkdirs();
+        if (!inputDir.exists()) {
+            boolean created = inputDir.mkdirs();
+            if (!created && !inputDir.exists()) System.err.println("Warning: Could not create input directory");
+        }
+        if (!outputDir.exists()) {
+            boolean created = outputDir.mkdirs();
+            if (!created && !outputDir.exists()) System.err.println("Warning: Could not create output directory");
+        }
 
         testFiles = new ArrayList<>();
 
@@ -66,25 +70,33 @@ public class BenchmarkTest extends TestCase {
 
     public void testRunCompleteBenchmark() throws Exception {
         System.out.println("==========================================================================");
-        System.out.println("  PARALLEL IMAGE PROCESSING BENCHMARK (Batch Size: " + IMAGE_COUNT + " Images @ 1080p)");
+        System.out.println("  CLEAN ARCHITECTURE BENCHMARK (Batch: " + IMAGE_COUNT + " Images @ 1080p)");
         System.out.println("  Logical CPU Cores Available: " + Runtime.getRuntime().availableProcessors());
         System.out.println("==========================================================================");
 
-        System.out.println("-> Running Sequential Processing (1 Thread Baseline)...");
-        long seqTime = BatchProcessor.processSequential(testFiles, outputDir, null);
+        SequentialStrategy seq = new SequentialStrategy();
+        long seqTime = seq.execute(testFiles, outputDir, 1, null);
         System.out.printf("Baseline Sequential Time (T_seq): %d ms\n\n", seqTime);
 
-        int[] threadCounts = {1, 2, 4, 8, 16, 32, 64};
+        BatchStrategy[] strategies = {
+            new DynamicQueueStrategy(),
+            new StaticPartitionStrategy(),
+            new PipelinedStrategy()
+        };
 
-        System.out.printf("%-10s | %-16s | %-12s | %-12s\n", "Threads(N)", "Execution Time", "Speedup (S)", "Efficiency (E)");
-        System.out.println("--------------------------------------------------------------------------");
+        int[] threadScales = {1, 2, 4, 8, 12, 16};
 
-        for (int threads : threadCounts) {
-            long parTime = BatchProcessor.processParallel(testFiles, outputDir, threads, null);
-            double speedup = (double) seqTime / (parTime > 0 ? parTime : 1);
-            double efficiency = speedup / threads;
+        for (BatchStrategy strat : strategies) {
+            System.out.println("-> Evaluating Strategy: " + strat.getName());
+            System.out.printf("%-10s | %-14s | %-10s\n", "Threads(N)", "Execution Time", "Speedup (S)");
+            System.out.println("---------------------------------------------------------");
 
-            System.out.printf("%-10d | %-14d ms | %-10.2fx | %-10.2f\n", threads, parTime, speedup, efficiency);
+            for (int t : threadScales) {
+                long parTime = strat.execute(testFiles, outputDir, t, null);
+                double speedup = (double) seqTime / (parTime > 0 ? parTime : 1);
+                System.out.printf("%-10d | %-12d ms | %-8.2fx\n", t, parTime, speedup);
+            }
+            System.out.println();
         }
 
         System.out.println("==========================================================================");
@@ -102,9 +114,13 @@ public class BenchmarkTest extends TestCase {
         File[] files = dir.listFiles();
         if (files != null) {
             for (File f : files) {
-                f.delete();
+                if (!f.delete()) {
+                    f.deleteOnExit();
+                }
             }
         }
-        dir.delete();
+        if (!dir.delete()) {
+            dir.deleteOnExit();
+        }
     }
 }
