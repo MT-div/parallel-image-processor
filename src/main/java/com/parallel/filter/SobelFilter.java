@@ -5,11 +5,6 @@ import java.awt.image.DataBufferInt;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Standardized High-Performance Sobel Filter Kernel.
- * Operates strictly on direct native integer array buffers (Zero getRGB calls)
- * to provide a 100% fair scientific baseline across all concurrency strategies.
- */
 public class SobelFilter {
 
     private static final int[][] Gx = {{-1, 0, 1}, {-2, 0, 2}, {-1, 0, 1}};
@@ -75,7 +70,7 @@ public class SobelFilter {
                         int r = (pixel >> 16) & 0xFF;
                         int g = (pixel >> 8) & 0xFF;
                         int b = pixel & 0xFF;
-                        int gray = (r * 77 + g * 150 + b * 29) >> 8; // Fast bitwise luminance
+                        int gray = (r * 77 + g * 150 + b * 29) >> 8;
 
                         sumX += Gx[ky + 1][kx + 1] * gray;
                         sumY += Gy[ky + 1][kx + 1] * gray;
