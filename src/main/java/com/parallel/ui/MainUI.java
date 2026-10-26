@@ -11,12 +11,20 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Interactive Graphical User Interface (GUI) for the Parallel Image Processing Studio.
- * Ensures a responsive UI thread by dispatching heavy computations to background worker threads.
+ * Modern Graphical Dashboard for Parallel Image Processing.
+ * Features comprehensive Multi-Bar Chart visualization up to 128 threads with live progress tracking.
  */
 public class MainUI extends JFrame {
 
+    private static final Color PRIMARY_COLOR = new Color(33, 150, 243);
+    private static final Color SUCCESS_COLOR = new Color(46, 125, 50);
+    private static final Color ACCENT_ORANGE = new Color(230, 81, 0);
+    private static final Color BG_LIGHT = new Color(245, 247, 250);
+    private static final Color CARD_BG = Color.WHITE;
+    private static final Color TEXT_DARK = new Color(33, 33, 33);
+
     private JLabel folderLabel;
+    private JLabel cpuInfoLabel;
     private JComboBox<String> threadSelector;
     private JProgressBar progressBar;
     private JButton runButton;
@@ -25,93 +33,155 @@ public class MainUI extends JFrame {
     private ChartPanel chartPanel;
 
     private File selectedDirectory;
-    private int recommendedThreads;
+    private final int availableCores;
 
     public MainUI() {
-        super("Parallel Image Processing Studio - Sobel Filter");
-        initUI();
+        super("Parallel Image Processing Studio | High-Performance Dashboard");
+        this.availableCores = Runtime.getRuntime().availableProcessors();
+        initModernUI();
     }
 
-    private void initUI() {
+    private void initModernUI() {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(1000, 720);
+        setSize(1180, 780);
         setLocationRelativeTo(null);
-        setLayout(new BorderLayout(10, 10));
+        getContentPane().setBackground(BG_LIGHT);
+        setLayout(new BorderLayout(15, 15));
 
-        recommendedThreads = Runtime.getRuntime().availableProcessors();
+        // 1. Header Card
+        JPanel headerCard = createStyledPanel();
+        headerCard.setLayout(new BoxLayout(headerCard, BoxLayout.Y_AXIS));
 
-        // 1. Top Control Panel
-        JPanel topPanel = new JPanel();
-        topPanel.setLayout(new BoxLayout(topPanel, BoxLayout.Y_AXIS));
-        topPanel.setBorder(new EmptyBorder(10, 15, 10, 15));
+        JPanel statusRow = new JPanel(new BorderLayout());
+        statusRow.setOpaque(false);
+        JLabel titleLabel = new JLabel("Parallel Image Edge Detection (Sobel)");
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        titleLabel.setForeground(TEXT_DARK);
 
-        JPanel dirRow = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        JButton browseBtn = new JButton("Select Images Folder");
+        cpuInfoLabel = new JLabel(String.format("System: %d Logical CPU Cores Available", availableCores));
+        cpuInfoLabel.setFont(new Font("Segoe UI", Font.ITALIC, 13));
+        cpuInfoLabel.setForeground(new Color(100, 116, 139));
+
+        statusRow.add(titleLabel, BorderLayout.WEST);
+        statusRow.add(cpuInfoLabel, BorderLayout.EAST);
+        headerCard.add(statusRow);
+        headerCard.add(Box.createVerticalStrut(12));
+
+        JPanel controlsRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
+        controlsRow.setOpaque(false);
+
+        JButton browseBtn = createStyledButton("Choose Folder", new Color(74, 85, 104));
         folderLabel = new JLabel("No folder selected");
-        dirRow.add(browseBtn);
-        dirRow.add(folderLabel);
+        folderLabel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
 
-        JPanel configRow = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        configRow.add(new JLabel("Worker Threads (N): "));
+        controlsRow.add(browseBtn);
+        controlsRow.add(folderLabel);
+        controlsRow.add(Box.createHorizontalStrut(15));
 
+        controlsRow.add(new JLabel("Threads:"));
         List<String> threadOptions = new ArrayList<>();
-        int[] availableThreads = {1, 2, 4, 8, 12, 16, 32, 64};
+        int[] availableThreads = {1, 2, 4, 8, 12, 16, 32, 64, 128};
         for (int t : availableThreads) {
-            if (t == recommendedThreads) {
+            if (t == availableCores) {
                 threadOptions.add(t + " (Recommended)");
             } else {
                 threadOptions.add(String.valueOf(t));
             }
         }
         threadSelector = new JComboBox<>(threadOptions.toArray(new String[0]));
-        // Select recommended by default
         for (int i = 0; i < threadOptions.size(); i++) {
             if (threadOptions.get(i).contains("Recommended")) {
                 threadSelector.setSelectedIndex(i);
                 break;
             }
         }
-        configRow.add(threadSelector);
+        controlsRow.add(threadSelector);
 
-        runButton = new JButton("Run Execution & Compare");
+        runButton = createStyledButton("Run Comparison", PRIMARY_COLOR);
         runButton.setEnabled(false);
-        benchmarkButton = new JButton("Run Full Benchmark (1-64 Threads)");
+        benchmarkButton = createStyledButton("Run Full Benchmark (1-128 Th)", new Color(106, 27, 154));
         benchmarkButton.setEnabled(false);
 
-        configRow.add(Box.createHorizontalStrut(15));
-        configRow.add(runButton);
-        configRow.add(benchmarkButton);
+        controlsRow.add(runButton);
+        controlsRow.add(benchmarkButton);
+        headerCard.add(controlsRow);
 
-        topPanel.add(dirRow);
-        topPanel.add(configRow);
-        add(topPanel, BorderLayout.NORTH);
+        JPanel topContainer = new JPanel(new BorderLayout());
+        topContainer.setOpaque(false);
+        topContainer.setBorder(new EmptyBorder(12, 15, 0, 15));
+        topContainer.add(headerCard, BorderLayout.CENTER);
+        add(topContainer, BorderLayout.NORTH);
 
-        // 2. Center Panel: Log area and Performance Chart
-        JPanel centerPanel = new JPanel(new GridLayout(1, 2, 10, 10));
-        centerPanel.setBorder(new EmptyBorder(0, 15, 0, 15));
+        // 2. Center Panel: Log & Chart
+        JPanel centerContainer = new JPanel(new GridLayout(1, 2, 15, 15));
+        centerContainer.setOpaque(false);
+        centerContainer.setBorder(new EmptyBorder(0, 15, 0, 15));
+
+        JPanel logCard = createStyledPanel();
+        logCard.setLayout(new BorderLayout(5, 5));
+        JLabel logTitle = new JLabel("Execution Output & Benchmarking Log");
+        logTitle.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        logCard.add(logTitle, BorderLayout.NORTH);
 
         logArea = new JTextArea();
         logArea.setEditable(false);
         logArea.setFont(new Font("Consolas", Font.PLAIN, 13));
+        logArea.setBackground(new Color(250, 250, 250));
         JScrollPane scrollLog = new JScrollPane(logArea);
+        scrollLog.setBorder(BorderFactory.createLineBorder(new Color(226, 232, 240)));
+        logCard.add(scrollLog, BorderLayout.CENTER);
 
         chartPanel = new ChartPanel();
-        centerPanel.add(scrollLog);
-        centerPanel.add(chartPanel);
-        add(centerPanel, BorderLayout.CENTER);
+
+        centerContainer.add(logCard);
+        centerContainer.add(chartPanel);
+        add(centerContainer, BorderLayout.CENTER);
 
         // 3. Bottom Progress Bar
-        JPanel bottomPanel = new JPanel(new BorderLayout(5, 5));
-        bottomPanel.setBorder(new EmptyBorder(5, 15, 10, 15));
+        JPanel bottomCard = createStyledPanel();
+        bottomCard.setLayout(new BorderLayout(8, 8));
+
         progressBar = new JProgressBar(0, 100);
         progressBar.setStringPainted(true);
-        bottomPanel.add(progressBar, BorderLayout.CENTER);
-        add(bottomPanel, BorderLayout.SOUTH);
+        progressBar.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        progressBar.setForeground(PRIMARY_COLOR);
+        progressBar.setPreferredSize(new Dimension(100, 24));
 
-        // Event Listeners
+        bottomCard.add(progressBar, BorderLayout.CENTER);
+
+        JPanel bottomContainer = new JPanel(new BorderLayout());
+        bottomContainer.setOpaque(false);
+        bottomContainer.setBorder(new EmptyBorder(0, 15, 15, 15));
+        bottomContainer.add(bottomCard, BorderLayout.CENTER);
+        add(bottomContainer, BorderLayout.SOUTH);
+
+        // Listeners
         browseBtn.addActionListener(e -> chooseDirectory());
         runButton.addActionListener(e -> executeComparison());
         benchmarkButton.addActionListener(e -> executeFullBenchmark());
+    }
+
+    private JPanel createStyledPanel() {
+        JPanel p = new JPanel();
+        p.setBackground(CARD_BG);
+        p.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(226, 232, 240), 1),
+                new EmptyBorder(12, 15, 12, 15)
+        ));
+        return p;
+    }
+
+    private JButton createStyledButton(String text, Color bg) {
+        JButton btn = new JButton(text);
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        btn.setForeground(Color.WHITE);
+        btn.setBackground(bg);
+        btn.setFocusPainted(false);
+        btn.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(bg.darker(), 1),
+                new EmptyBorder(6, 14, 6, 14)
+        ));
+        return btn;
     }
 
     private void chooseDirectory() {
@@ -119,10 +189,12 @@ public class MainUI extends JFrame {
         chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
         if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
             selectedDirectory = chooser.getSelectedFile();
-            folderLabel.setText(selectedDirectory.getAbsolutePath());
-            runButton.setEnabled(true);
-            benchmarkButton.setEnabled(true);
-            logArea.append("Selected Directory: " + selectedDirectory.getAbsolutePath() + "\n");
+            List<File> images = getImageFiles();
+            folderLabel.setText(selectedDirectory.getName() + " (" + images.size() + " images found)");
+            boolean hasImages = !images.isEmpty();
+            runButton.setEnabled(hasImages);
+            benchmarkButton.setEnabled(hasImages);
+            logArea.append("Folder Selected: " + selectedDirectory.getAbsolutePath() + " [" + images.size() + " images]\n");
         }
     }
 
@@ -138,23 +210,15 @@ public class MainUI extends JFrame {
     private int getSelectedThreads() {
         String selected = (String) threadSelector.getSelectedItem();
         if (selected == null) return 1;
-        String num = selected.split(" ")[0];
-        return Integer.parseInt(num);
+        return Integer.parseInt(selected.split(" ")[0]);
     }
 
-    /**
-     * Executes Single Comparison (Sequential vs Parallel) on a background thread.
-     */
     private void executeComparison() {
         List<File> images = getImageFiles();
-        if (images.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "No valid image files (JPG/PNG) found in the selected folder!", "Warning", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
         int threads = getSelectedThreads();
         setControlsEnabled(false);
-        logArea.append("\n--- Starting Batch Comparison (" + images.size() + " images) with " + threads + " threads ---\n");
+        progressBar.setValue(0);
+        logArea.append(String.format("\n--- Starting Single Comparison (%d Images | %d Threads) ---\n", images.size(), threads));
 
         File outSeq = new File(selectedDirectory, "output_seq");
         File outPar = new File(selectedDirectory, "output_par");
@@ -163,30 +227,34 @@ public class MainUI extends JFrame {
 
         new Thread(() -> {
             try {
-                // 1. Sequential Run
-                SwingUtilities.invokeLater(() -> logArea.append("1. Running Sequential Processing...\n"));
+                // Sequential
                 long seqTime = BatchProcessor.processSequential(images, outSeq, (done, total) -> {
-                    int percent = (int) (((double) done / total) * 50);
-                    SwingUtilities.invokeLater(() -> progressBar.setValue(percent));
+                    int p = (int) (((double) done / total) * 50);
+                    SwingUtilities.invokeLater(() -> {
+                        progressBar.setValue(p);
+                        progressBar.setString("Sequential: " + done + " / " + total);
+                    });
                 });
-                SwingUtilities.invokeLater(() -> logArea.append("-> Sequential Time: " + seqTime + " ms\n"));
+                SwingUtilities.invokeLater(() -> logArea.append("Sequential Completed: " + seqTime + " ms\n"));
 
-                // 2. Parallel Run
-                SwingUtilities.invokeLater(() -> logArea.append("2. Running Parallel Processing (" + threads + " threads)...\n"));
+                // Parallel
                 long parTime = BatchProcessor.processParallel(images, outPar, threads, (done, total) -> {
-                    int percent = 50 + (int) (((double) done / total) * 50);
-                    SwingUtilities.invokeLater(() -> progressBar.setValue(percent));
+                    int p = 50 + (int) (((double) done / total) * 50);
+                    SwingUtilities.invokeLater(() -> {
+                        progressBar.setValue(p);
+                        progressBar.setString("Parallel (" + threads + " Th): " + done + " / " + total);
+                    });
                 });
-                SwingUtilities.invokeLater(() -> logArea.append("-> Parallel Time: " + parTime + " ms\n"));
+                SwingUtilities.invokeLater(() -> logArea.append("Parallel Completed: " + parTime + " ms\n"));
 
                 double speedup = (double) seqTime / (parTime > 0 ? parTime : 1);
                 SwingUtilities.invokeLater(() -> {
-                    logArea.append(String.format("=> Achieved Speedup: %.2fx (Efficiency: %.2f)\n", speedup, speedup / threads));
-                    chartPanel.updateChart(seqTime, parTime, speedup, threads);
+                    logArea.append(String.format("=> Speedup: %.2fx | Efficiency: %.2f\n", speedup, speedup / threads));
+                    chartPanel.setSingleComparison(seqTime, parTime, speedup, threads);
                     progressBar.setValue(100);
+                    progressBar.setString("Done! Speedup: " + String.format("%.2fx", speedup));
                     setControlsEnabled(true);
                 });
-
             } catch (Exception ex) {
                 SwingUtilities.invokeLater(() -> {
                     logArea.append("Error: " + ex.getMessage() + "\n");
@@ -196,37 +264,65 @@ public class MainUI extends JFrame {
         }).start();
     }
 
-    /**
-     * Executes Full Benchmark across all thread counts in a background thread.
-     */
     private void executeFullBenchmark() {
         List<File> images = getImageFiles();
-        if (images.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "No valid images found!", "Warning", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
         setControlsEnabled(false);
-        logArea.append("\n================ FULL BENCHMARK SUITE ================\n");
+        progressBar.setValue(0);
+        logArea.append(String.format("\n================ FULL BENCHMARK SUITE (%d Images) ================\n", images.size()));
+
         File outDir = new File(selectedDirectory, "output_benchmark");
         outDir.mkdirs();
 
         new Thread(() -> {
             try {
+                SwingUtilities.invokeLater(() -> progressBar.setString("Measuring Baseline Sequential..."));
                 long seqTime = BatchProcessor.processSequential(images, outDir, null);
-                SwingUtilities.invokeLater(() -> logArea.append("Sequential Baseline Time: " + seqTime + " ms\n"));
+                SwingUtilities.invokeLater(() -> {
+                    logArea.append("Baseline Sequential (1 Thread): " + seqTime + " ms\n");
+                    logArea.append("-------------------------------------------------------------------\n");
+                    logArea.append(String.format("%-10s | %-12s | %-10s | %-10s\n", "Threads", "Time (ms)", "Speedup", "Efficiency"));
+                    logArea.append("-------------------------------------------------------------------\n");
+                });
 
-                int[] testScales = {1, 2, 4, 8, 12, 16, 32, 64};
-                for (int t : testScales) {
-                    long parTime = BatchProcessor.processParallel(images, outDir, t, null);
+                int[] testScales = {1, 2, 4, 8, 12, 16, 32, 64, 128};
+                List<Integer> threadList = new ArrayList<>();
+                List<Long> timeList = new ArrayList<>();
+                List<Double> speedupList = new ArrayList<>();
+
+                for (int idx = 0; idx < testScales.length; idx++) {
+                    int t = testScales[idx];
+                    final int stepIndex = idx + 1;
+                    final int totalSteps = testScales.length;
+
+                    long parTime = BatchProcessor.processParallel(images, outDir, t, (done, total) -> {
+                        int overallPercent = (int) (((stepIndex - 1 + ((double) done / total)) / totalSteps) * 100);
+                        SwingUtilities.invokeLater(() -> {
+                            progressBar.setValue(overallPercent);
+                            progressBar.setString("Benchmark: " + t + " Threads [" + done + "/" + total + "]");
+                        });
+                    });
+
                     double speedup = (double) seqTime / (parTime > 0 ? parTime : 1);
                     double eff = speedup / t;
-                    SwingUtilities.invokeLater(() -> logArea.append(String.format("Threads: %-2d | Time: %-6d ms | Speedup: %-5.2fx | Eff: %.2f\n", t, parTime, speedup, eff)));
+
+                    threadList.add(t);
+                    timeList.add(parTime);
+                    speedupList.add(speedup);
+
+                    SwingUtilities.invokeLater(() -> {
+                        logArea.append(String.format("%-10d | %-12d | %-8.2fx | %-10.2f\n", t, parTime, speedup, eff));
+                        // Update multi-bar chart live after each thread scale finishes
+                        chartPanel.setBenchmarkBars(seqTime, new ArrayList<>(threadList), new ArrayList<>(timeList), new ArrayList<>(speedupList));
+                    });
                 }
+
                 SwingUtilities.invokeLater(() -> {
                     logArea.append("================ BENCHMARK FINISHED ================\n");
+                    progressBar.setValue(100);
+                    progressBar.setString("Benchmark Complete!");
                     setControlsEnabled(true);
                 });
+
             } catch (Exception ex) {
                 SwingUtilities.invokeLater(() -> {
                     logArea.append("Benchmark Error: " + ex.getMessage() + "\n");
@@ -250,44 +346,74 @@ public class MainUI extends JFrame {
     }
 
     /**
-     * Inner Component rendering execution comparison charts.
+     * Interactive Bar Chart Panel rendering execution times and speedups directly above each bar.
      */
     private static class ChartPanel extends JPanel {
+        private boolean isBenchmark = false;
+
+        // Single comparison data
         private long seqTime = 0;
         private long parTime = 0;
-        private double speedup = 0.0;
-        private int threads = 0;
+        private double singleSpeedup = 0.0;
+        private int singleThreads = 0;
+
+        // Benchmark data
+        private List<Integer> benchThreads = new ArrayList<>();
+        private List<Long> benchTimes = new ArrayList<>();
+        private List<Double> benchSpeedups = new ArrayList<>();
 
         public ChartPanel() {
-            setBackground(Color.WHITE);
-            setBorder(BorderFactory.createTitledBorder("Execution Time & Speedup Comparison"));
+            setBackground(CARD_BG);
+            setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(new Color(226, 232, 240), 1),
+                    new EmptyBorder(10, 15, 10, 15)
+            ));
         }
 
-        public void updateChart(long seqTime, long parTime, double speedup, int threads) {
+        public void setSingleComparison(long seqTime, long parTime, double speedup, int threads) {
+            this.isBenchmark = false;
             this.seqTime = seqTime;
             this.parTime = parTime;
-            this.speedup = speedup;
-            this.threads = threads;
+            this.singleSpeedup = speedup;
+            this.singleThreads = threads;
+            repaint();
+        }
+
+        public void setBenchmarkBars(long seqTime, List<Integer> threads, List<Long> times, List<Double> speedups) {
+            this.isBenchmark = true;
+            this.seqTime = seqTime;
+            this.benchThreads = threads;
+            this.benchTimes = times;
+            this.benchSpeedups = speedups;
             repaint();
         }
 
         @Override
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
-            if (seqTime == 0 && parTime == 0) {
-                g.setColor(Color.GRAY);
-                g.drawString("No execution data available yet. Run a comparison to view the chart.", 40, getHeight() / 2);
-                return;
-            }
-
             Graphics2D g2 = (Graphics2D) g;
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
             int width = getWidth();
             int height = getHeight();
-            int chartBaseY = height - 80;
-            int maxBarHeight = height - 160;
 
+            if (!isBenchmark) {
+                drawSingleBarChart(g2, width, height);
+            } else {
+                drawBenchmarkBarChart(g2, width, height);
+            }
+        }
+
+        private void drawSingleBarChart(Graphics2D g2, int width, int height) {
+            if (seqTime == 0 && parTime == 0) {
+                g2.setColor(new Color(148, 163, 184));
+                g2.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+                g2.drawString("Execution charts will render here after execution.", 30, height / 2);
+                return;
+            }
+
+            int chartBaseY = height - 70;
+            int maxBarHeight = height - 170;
             long maxTime = Math.max(seqTime, parTime);
             if (maxTime == 0) maxTime = 1;
 
@@ -298,28 +424,81 @@ public class MainUI extends JFrame {
             int bar1Height = (int) (((double) seqTime / maxTime) * maxBarHeight);
             int bar2Height = (int) (((double) parTime / maxTime) * maxBarHeight);
 
-            // Sequential Bar (Orange/Red)
-            g2.setColor(new Color(230, 81, 0));
-            g2.fillRect(bar1X, chartBaseY - bar1Height, barWidth, bar1Height);
-            g2.setColor(Color.BLACK);
-            g2.drawRect(bar1X, chartBaseY - bar1Height, barWidth, bar1Height);
-            g2.drawString("Sequential (1 Th)", bar1X - 5, chartBaseY + 20);
-            g2.drawString(seqTime + " ms", bar1X + 15, chartBaseY - bar1Height - 8);
+            // Sequential Bar
+            g2.setColor(ACCENT_ORANGE);
+            g2.fillRoundRect(bar1X, chartBaseY - bar1Height, barWidth, bar1Height, 8, 8);
+            g2.setColor(TEXT_DARK);
+            g2.setFont(new Font("Segoe UI", Font.BOLD, 13));
+            g2.drawString("Sequential", bar1X + 12, chartBaseY + 22);
+            g2.drawString(seqTime + " ms", bar1X + 18, chartBaseY - bar1Height - 8);
 
-            // Parallel Bar (Green)
-            g2.setColor(new Color(46, 125, 50));
-            g2.fillRect(bar2X, chartBaseY - bar2Height, barWidth, bar2Height);
-            g2.setColor(Color.BLACK);
-            g2.drawRect(bar2X, chartBaseY - bar2Height, barWidth, bar2Height);
-            g2.drawString("Parallel (" + threads + " Th)", bar2X, chartBaseY + 20);
-            g2.drawString(parTime + " ms", bar2X + 15, chartBaseY - bar2Height - 8);
+            // Parallel Bar
+            g2.setColor(SUCCESS_COLOR);
+            g2.fillRoundRect(bar2X, chartBaseY - bar2Height, barWidth, bar2Height, 8, 8);
+            g2.setColor(TEXT_DARK);
+            g2.drawString(singleThreads + " Threads", bar2X + 12, chartBaseY + 22);
+            g2.drawString(parTime + " ms", bar2X + 18, chartBaseY - bar2Height - 26);
 
-            // Speedup Badge
-            g2.setColor(new Color(25, 118, 210));
-            g2.fillRoundRect(width / 2 - 80, 30, 160, 40, 10, 10);
-            g2.setColor(Color.WHITE);
-            g2.setFont(new Font("SansSerif", Font.BOLD, 15));
-            g2.drawString(String.format("Speedup: %.2fx", speedup), width / 2 - 60, 55);
+            // Speedup over Parallel bar
+            g2.setColor(PRIMARY_COLOR.darker());
+            g2.setFont(new Font("Segoe UI", Font.BOLD, 15));
+            g2.drawString(String.format("Speedup: %.2fx", singleSpeedup), bar2X - 5, chartBaseY - bar2Height - 8);
+        }
+
+        private void drawBenchmarkBarChart(Graphics2D g2, int width, int height) {
+            if (benchThreads.isEmpty()) return;
+
+            g2.setColor(TEXT_DARK);
+            g2.setFont(new Font("Segoe UI", Font.BOLD, 15));
+            g2.drawString("Multi-Threaded Benchmark Scale (1 to 128 Threads)", 20, 25);
+
+            int count = benchThreads.size();
+            int chartBaseY = height - 60;
+            int maxBarHeight = height - 170;
+
+            // Find Maximum Time for scaling
+            long maxTime = seqTime;
+            for (long t : benchTimes) {
+                if (t > maxTime) maxTime = t;
+            }
+            if (maxTime == 0) maxTime = 1;
+
+            // Find Best Speedup
+            double bestSpeedup = 0.0;
+            for (double s : benchSpeedups) {
+                if (s > bestSpeedup) bestSpeedup = s;
+            }
+
+            int availableWidth = width - 40;
+            int barWidth = Math.min(50, (availableWidth / count) - 10);
+            int gap = (availableWidth - (count * barWidth)) / (count + 1);
+
+            for (int i = 0; i < count; i++) {
+                int x = 20 + gap + i * (barWidth + gap);
+                long time = benchTimes.get(i);
+                double speedup = benchSpeedups.get(i);
+                int barHeight = (int) (((double) time / maxTime) * maxBarHeight);
+
+                // Highlight best performing thread count in Green, others in Blue/Slate
+                if (speedup == bestSpeedup && speedup > 1.0) {
+                    g2.setColor(SUCCESS_COLOR);
+                } else {
+                    g2.setColor(PRIMARY_COLOR);
+                }
+
+                g2.fillRoundRect(x, chartBaseY - barHeight, barWidth, barHeight, 6, 6);
+
+                // Speedup above bar
+                g2.setColor(TEXT_DARK);
+                g2.setFont(new Font("Segoe UI", Font.BOLD, 11));
+                g2.drawString(String.format("%.1fx", speedup), x + 2, chartBaseY - barHeight - 8);
+
+                // Labels below bar
+                g2.setColor(new Color(100, 116, 139));
+                g2.drawString(benchThreads.get(i) + "T", x + (barWidth / 4), chartBaseY + 18);
+                g2.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+                g2.drawString(time + "ms", x - 2, chartBaseY + 34);
+            }
         }
     }
 }
