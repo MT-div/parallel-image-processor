@@ -34,7 +34,7 @@ public class MainUI extends JFrame {
     private final Map<String, BatchStrategy> strategyMap = new LinkedHashMap<>();
 
     public MainUI() {
-        super("Parallel Image Processing Studio | Fair Concurrency Benchmark");
+        super("Parallel Image Processing Studio | Standard Benchmark Dashboard");
         this.availableCores = Runtime.getRuntime().availableProcessors();
 
         strategyMap.put("Dynamic Atomic Queue", new DynamicQueueStrategy());
@@ -58,7 +58,7 @@ public class MainUI extends JFrame {
 
         JPanel statusRow = new JPanel(new BorderLayout());
         statusRow.setOpaque(false);
-        JLabel title = new JLabel("Parallel Image Processing Studio (Fair Self-Relative Benchmark)");
+        JLabel title = new JLabel("Parallel Image Processing Studio (Standard Single Baseline)");
         title.setFont(new Font("Segoe UI", Font.BOLD, 18));
         JLabel cpuInfo = new JLabel("System: " + availableCores + " Logical CPU Cores Available");
         cpuInfo.setFont(new Font("Segoe UI", Font.ITALIC, 13));
@@ -95,7 +95,7 @@ public class MainUI extends JFrame {
 
         runSingleButton = createButton("Run Selected", DYNAMIC_COLOR);
         runSingleButton.setEnabled(false);
-        runUltimateButton = createButton("Fair Benchmark (All 4 Strategies)", new Color(106, 27, 154));
+        runUltimateButton = createButton("Standard Benchmark (All 4 Strategies)", new Color(106, 27, 154));
         runUltimateButton.setEnabled(false);
 
         controls.add(runSingleButton);
@@ -108,14 +108,14 @@ public class MainUI extends JFrame {
         topWrap.add(headerCard, BorderLayout.CENTER);
         add(topWrap, BorderLayout.NORTH);
 
-        // 2. Center Panel: Log & Multi-Bar Chart
+        // 2. Center: Log & Grouped Chart
         JPanel center = new JPanel(new GridLayout(1, 2, 15, 15));
         center.setOpaque(false);
         center.setBorder(new EmptyBorder(0, 15, 0, 15));
 
         JPanel logCard = createCardPanel();
         logCard.setLayout(new BorderLayout(5, 5));
-        logCard.add(new JLabel("Execution & Benchmark Logs (Seconds & Self-Speedup)"), BorderLayout.NORTH);
+        logCard.add(new JLabel("Execution & Benchmark Logs (Unified Sequential Baseline)"), BorderLayout.NORTH);
         logArea = new JTextArea();
         logArea.setEditable(false);
         logArea.setFont(new Font("Consolas", Font.PLAIN, 12));
@@ -145,7 +145,7 @@ public class MainUI extends JFrame {
         // Listeners
         browse.addActionListener(e -> chooseDirectory());
         runSingleButton.addActionListener(e -> executeSingle());
-        runUltimateButton.addActionListener(e -> executeFairBenchmark());
+        runUltimateButton.addActionListener(e -> executeStandardBenchmark());
     }
 
     private JPanel createCardPanel() {
@@ -206,7 +206,7 @@ public class MainUI extends JFrame {
         BatchStrategy strategy = strategyMap.get(stratKey);
 
         setControls(false);
-        logArea.append(String.format("\n--- Running Single Comparison [%s | %d Th | %d Images] ---\n", stratKey, threads, images.size()));
+        logArea.append(String.format("\n--- Single Comparison [%s | %d Th | %d Images] ---\n", stratKey, threads, images.size()));
 
         File outSeq = new File(selectedDirectory, "out_seq");
         File outPar = new File(selectedDirectory, "out_par_" + strategy.getClass().getSimpleName().toLowerCase());
@@ -215,11 +215,12 @@ public class MainUI extends JFrame {
 
         new Thread(() -> {
             try {
-                // 1. Single-Thread Baseline for this strategy
-                long baseTime = strategy.execute(images, outSeq, 1, null);
-                SwingUtilities.invokeLater(() -> logArea.append(String.format("%s (1 Thread Baseline): %.2f s\n", stratKey, baseTime / 1000.0)));
+                // Unified Baseline: Pure Sequential Execution
+                SequentialStrategy seq = new SequentialStrategy();
+                long seqTime = seq.execute(images, outSeq, 1, null);
+                SwingUtilities.invokeLater(() -> logArea.append(String.format("Sequential Baseline Time: %.2f s (%d ms)\n", seqTime / 1000.0, seqTime)));
 
-                // 2. Multi-Threaded Execution
+                // Parallel Strategy Execution
                 long parTime = strategy.execute(images, outPar, threads, (d, t) -> {
                     int p = (int) (((double) d / t) * 100);
                     SwingUtilities.invokeLater(() -> {
@@ -227,12 +228,12 @@ public class MainUI extends JFrame {
                         progressBar.setString(stratKey + " [" + threads + " Th]: " + d + "/" + t);
                     });
                 });
-                SwingUtilities.invokeLater(() -> logArea.append(String.format("%s (%d Threads): %.2f s\n", stratKey, threads, parTime / 1000.0)));
+                SwingUtilities.invokeLater(() -> logArea.append(String.format("%s (%d Threads): %.2f s (%d ms)\n", stratKey, threads, parTime / 1000.0, parTime)));
 
-                double speedup = (double) baseTime / (parTime > 0 ? parTime : 1);
+                double speedup = (double) seqTime / (parTime > 0 ? parTime : 1);
                 SwingUtilities.invokeLater(() -> {
-                    logArea.append(String.format("=> Self-Speedup: %.2fx | Efficiency: %.2f\n", speedup, speedup / threads));
-                    chartPanel.setSingleResult(baseTime, parTime, speedup, threads, stratKey);
+                    logArea.append(String.format("=> Standard Speedup: %.2fx | Efficiency: %.2f\n", speedup, speedup / threads));
+                    chartPanel.setSingleResult(seqTime, parTime, speedup, threads, stratKey);
                     progressBar.setValue(100);
                     progressBar.setString("Done! Speedup: " + String.format("%.2fx", speedup));
                     setControls(true);
@@ -246,30 +247,28 @@ public class MainUI extends JFrame {
         }).start();
     }
 
-    private void executeFairBenchmark() {
+    private void executeStandardBenchmark() {
         List<File> images = getImages();
         setControls(false);
         progressBar.setValue(0);
-        logArea.append(String.format("\n================ FAIR BENCHMARK: 4 STRATEGIES (SELF-RELATIVE 1T BASELINE) (%d Images) ================\n", images.size()));
+        logArea.append(String.format("\n================ STANDARD BENCHMARK: UNIFIED BASELINE (%d Images) ================\n", images.size()));
 
-        File outBench = new File(selectedDirectory, "out_fair_benchmark");
+        File outBench = new File(selectedDirectory, "out_standard_benchmark");
         outBench.mkdirs();
 
         new Thread(() -> {
             try {
-                // Measure 1-Thread Baseline for EACH strategy to guarantee 1.00x at 1 Thread
-                Map<String, Long> selfBaselines = new LinkedHashMap<>();
-                SwingUtilities.invokeLater(() -> logArea.append("Establishing 1-Thread Baselines for each strategy...\n"));
-
-                for (Map.Entry<String, BatchStrategy> entry : strategyMap.entrySet()) {
-                    long base = entry.getValue().execute(images, outBench, 1, null);
-                    selfBaselines.put(entry.getKey(), base);
-                    SwingUtilities.invokeLater(() -> logArea.append(String.format("-> Baseline %-28s (1T): %.2f s (%d ms)\n", entry.getKey(), base / 1000.0, base)));
-                }
-
-                logArea.append("\n" + "=".repeat(95) + "\n");
-                logArea.append(String.format("%-28s | %-4s | %-12s | %-10s | %-10s\n", "Strategy", "Th", "Time (s)", "Self-Speedup", "Efficiency"));
-                logArea.append("-".repeat(95) + "\n");
+                // 1. Single Unified Sequential Baseline
+                SwingUtilities.invokeLater(() -> progressBar.setString("Measuring Unified Sequential Baseline..."));
+                SequentialStrategy seq = new SequentialStrategy();
+                long seqTime = seq.execute(images, outBench, 1, null);
+                
+                SwingUtilities.invokeLater(() -> {
+                    logArea.append(String.format("Unified Baseline Sequential Time (T_seq): %.2f s (%d ms)\n", seqTime / 1000.0, seqTime));
+                    logArea.append("=".repeat(95) + "\n");
+                    logArea.append(String.format("%-28s | %-4s | %-12s | %-10s | %-10s\n", "Strategy", "Th", "Time (s)", "Speedup", "Efficiency"));
+                    logArea.append("-".repeat(95) + "\n");
+                });
 
                 int[] testScales = {1, 2, 4, 8, 12, 16, 32, 64, 128};
                 int totalSteps = testScales.length * strategyMap.size();
@@ -284,7 +283,7 @@ public class MainUI extends JFrame {
                         currentStep++;
                         final int stepNum = currentStep;
 
-                        long parTime = (t == 1) ? selfBaselines.get(sName) : strategy.execute(images, outBench, t, (d, tot) -> {
+                        long parTime = strategy.execute(images, outBench, t, (d, tot) -> {
                             int overall = (int) (((stepNum - 1 + ((double) d / tot)) / totalSteps) * 100);
                             SwingUtilities.invokeLater(() -> {
                                 progressBar.setValue(overall);
@@ -292,8 +291,7 @@ public class MainUI extends JFrame {
                             });
                         });
 
-                        long baseForStrat = selfBaselines.get(sName);
-                        double speedup = (double) baseForStrat / (parTime > 0 ? parTime : 1);
+                        double speedup = (double) seqTime / (parTime > 0 ? parTime : 1);
                         double eff = speedup / t;
 
                         BenchmarkResult res = new BenchmarkResult(sName, t, parTime, speedup, eff);
@@ -301,14 +299,14 @@ public class MainUI extends JFrame {
 
                         SwingUtilities.invokeLater(() -> {
                             logArea.append(String.format("%-28s | %-3dT | %-9.2f s | %-10.2fx | %-10.2f\n", sName, t, parTime / 1000.0, speedup, eff));
-                            chartPanel.setUltimateResults(new ArrayList<>(results));
+                            chartPanel.setUltimateResults(seqTime, new ArrayList<>(results));
                         });
                     }
                     SwingUtilities.invokeLater(() -> logArea.append("-".repeat(95) + "\n"));
                 }
 
                 SwingUtilities.invokeLater(() -> {
-                    logArea.append("================ FAIR BENCHMARK FINISHED ================\n");
+                    logArea.append("================ STANDARD BENCHMARK FINISHED ================\n");
                     progressBar.setValue(100);
                     progressBar.setString("All Benchmarks Complete!");
                     setControls(true);
@@ -335,8 +333,7 @@ public class MainUI extends JFrame {
     }
 
     /**
-     * Grouped Multi-Bar Chart displaying Execution Time (Seconds) on Y-Axis
-     * and Self-Speedup explicitly above each bar.
+     * Grouped Multi-Bar Chart with Seconds on Y-Axis and Standard Speedup on top of bars.
      */
     private static class MultiChartPanel extends JPanel {
         private boolean isUltimate = false;
@@ -364,8 +361,9 @@ public class MainUI extends JFrame {
             repaint();
         }
 
-        public void setUltimateResults(List<BenchmarkResult> results) {
+        public void setUltimateResults(long seq, List<BenchmarkResult> results) {
             this.isUltimate = true;
+            this.seqTime = seq;
             this.ultimateResults = results;
             repaint();
         }
@@ -408,7 +406,7 @@ public class MainUI extends JFrame {
             g2.setColor(STATIC_COLOR);
             g2.fillRoundRect(b1X, baseY - h1, bw, h1, 8, 8);
             g2.setColor(TEXT_DARK);
-            g2.drawString("1 Thread Baseline", b1X, baseY + 20);
+            g2.drawString("Unified Baseline", b1X, baseY + 20);
             g2.drawString(String.format("%.2f s", seqTime / 1000.0), b1X + 15, baseY - h1 - 8);
 
             g2.setColor(DYNAMIC_COLOR);
@@ -425,10 +423,9 @@ public class MainUI extends JFrame {
         private void drawUltimateGrouped(Graphics2D g2, int w, int h) {
             if (ultimateResults.isEmpty()) return;
 
-            // Draw Title and Y-Axis Label
             g2.setColor(TEXT_DARK);
             g2.setFont(new Font("Segoe UI", Font.BOLD, 13));
-            g2.drawString("Execution Time (Seconds) & Self-Relative Speedup [Lower Bar = Faster]", 25, 20);
+            g2.drawString("Execution Time (Seconds) vs Unified Baseline [Lower Bar = Faster]", 25, 20);
 
             // Draw Legend
             g2.setFont(new Font("Segoe UI", Font.BOLD, 10));
@@ -453,13 +450,14 @@ public class MainUI extends JFrame {
             int baseY = h - 55;
             int maxBarH = h - 145;
 
-            // Find Max Execution Time for Scaling Y-Axis
-            long maxTime = 1;
+            // Maximum execution time between baseline and all runs
+            long maxTime = seqTime;
             for (BenchmarkResult r : ultimateResults) {
                 if (r.getExecutionTime() > maxTime) maxTime = r.getExecutionTime();
             }
+            if (maxTime == 0) maxTime = 1;
 
-            // Draw Y-Axis Guide Lines
+            // Draw Y-Axis guides
             g2.setColor(new Color(226, 232, 240));
             g2.drawLine(35, baseY, w - 20, baseY);
             g2.drawLine(35, baseY - maxBarH, w - 20, baseY - maxBarH);
@@ -495,13 +493,13 @@ public class MainUI extends JFrame {
                     g2.setFont(new Font("Segoe UI", Font.BOLD, 8));
                     g2.drawString(String.format("%.1fx", res.getSpeedup()), x - 2, baseY - barH - 4);
 
-                    // Time in seconds below bar (vertical style or compact)
+                    // Time in seconds below bar
                     g2.setColor(new Color(100, 116, 139));
                     g2.setFont(new Font("Segoe UI", Font.PLAIN, 7));
                     g2.drawString(String.format("%.1f", res.getExecutionTime() / 1000.0), x - 2, baseY + 12 + (i % 2 * 9));
                 }
 
-                // Group Label (Threads)
+                // Group Label
                 g2.setColor(new Color(30, 41, 59));
                 g2.setFont(new Font("Segoe UI", Font.BOLD, 11));
                 g2.drawString(threads + "T", groupStartX + (groupWidth / 3) - 4, baseY + 32);
